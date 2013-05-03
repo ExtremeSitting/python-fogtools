@@ -15,6 +15,9 @@
 import pyrax
 import argparse
 
+import pyrax.exceptions as exc
+import novaclient.exceptions as ncexc
+
 
 adminpasses = {}
 
@@ -65,7 +68,7 @@ def auth(*args):
     if not args:
         pyrax.set_credential_file(credentials)
     else:
-        pyrax.set_credential_file(credentials, args[0])
+        pyrax.set_credential_file(credentials, region=args[0])
     return pyrax.cloudservers
 
 def servercallback(srv):
@@ -107,17 +110,35 @@ def listimages(*args):
     '''Print out all images including base images in account'''
     cs = auth()
     basefields = ['Name', 'Status', 'Created at', 'ID']
-    snapfields = ['Name', 'Status', 'Parent', 'Created at', 'ID']
+    snapfields = ['Name', 'Status', 'DC', 'Parent', 'Created at', 'ID']
     baseimages = []
     snaps = []
+    dfwservers = pyrax.connect_to_cloudservers(region='DFW')
+    ordservers = pyrax.connect_to_cloudservers(region='ORD')
     for image in cs.images.list():
-#        print dir(image), '\n'
-        if 'server' in dir(image):
-            snaps.append((image.name, image.status, image.server['id'],
-                    converttime(image.created), image.id))
-        else:
+        if image.metadata['image_type'] == 'base':
             baseimages.append((image.name, image.status,
                     converttime(image.created), image.id))
+    for image in dfwservers.images.list():
+        if image.metadata['image_type'] == 'snapshot':
+            try:
+                snaps.append((image.name, image.status, 'DFW',
+                        image.server['id'], converttime(image.created),
+                        image.id))
+            except AttributeError:
+                snaps.append((image.name, image.status, 'DFW',
+                        'Server Deleted', converttime(image.created),
+                        image.id))
+    for image in ordservers.images.list():
+        if image.metadata['image_type'] == 'snapshot':
+            try:
+                snaps.append((image.name, image.status, 'ORD',
+                        image.server['id'], converttime(image.created),
+                        image.id))
+            except AttributeError:
+                snaps.append((image.name, image.status, 'ORD',
+                        'Server Deleted', converttime(image.created),
+                        image.id))
     printhortable(basefields, baseimages)
     printhortable(snapfields, snaps)
 
@@ -153,7 +174,11 @@ def massbuild(*args, **kwargs):
     specified starting at 1. Default naming convention is "web1, web2, web3".
     If wait is False, returned build data is provided immediatly. It is likely
     that the network info will be unavailable until the build completes.'''
-    cs = auth(kwargs['region'])
+    if kwargs['region'] is None:
+        region = kwargs['region']
+    else:
+        region = kwargs['region'].upper()
+    cs = auth(region)
     basename = kwargs['basename']
     size = kwargs['size']
     for flvr in cs.flavors.list():
@@ -165,6 +190,11 @@ def massbuild(*args, **kwargs):
                 imageid = image.id
     else:
         imageid = kwargs['imageid']
+        try:
+            cs.images.get(imageid)
+        except ncexc.NotFound:
+            print 'Image not found. It may not be local to %s.' % cs.client.region_name
+            exit(1)
     start = kwargs['start']
     amount = kwargs['amount']
     printvertable([('Name: ', basename), ('Size: ', size), ('Amount: ', amount),
