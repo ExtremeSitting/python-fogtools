@@ -13,7 +13,6 @@ try:
 except:
     import requests
 
-##TODO: Add multi region support
 
 def auth(username, apikey, servicename=None, region=None, debug=False):
     """Auth!
@@ -33,7 +32,6 @@ def auth(username, apikey, servicename=None, region=None, debug=False):
     else:
         if servicename:
             for i in auth_data['serviceCatalog']:
-#                print i['name']
                 if i['name'] == servicename:
                     if region:
                         for serv in i['endpoints']:
@@ -41,9 +39,6 @@ def auth(username, apikey, servicename=None, region=None, debug=False):
                                 account_data['uri'] = serv['publicURL']
                     else:
                        account_data['uri'] = i['endpoints'][0]['publicURL']
-#                else:
-#                    print '%s not found in Catalog.' % servicename
-#                    account_data['uri'] = None
         account_data['token'] = auth_data['token']['id']
         account_data['id'] = auth_data['token']['tenant']['id']
         return account_data
