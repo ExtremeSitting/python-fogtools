@@ -26,19 +26,20 @@ def auth(username, apikey, servicename=None, region=None, debug=False):
     response = requests.post('https://identity.api.rackspacecloud.com/v2.0/tokens',
             data=json.dumps(payload), headers=headers)
     auth_data = response.json['access']
+    if not servicename:
+        raise Exception('servicename must be defined')
     if debug:
         for i in auth_data['serviceCatalog']:
             print i
     else:
-        if servicename:
-            for i in auth_data['serviceCatalog']:
-                if i['name'] == servicename:
-                    if region:
-                        for serv in i['endpoints']:
-                            if region.upper() == serv['region']:
-                                account_data['uri'] = serv['publicURL']
-                    else:
-                       account_data['uri'] = i['endpoints'][0]['publicURL']
+        for i in auth_data['serviceCatalog']:
+            if i['name'] == servicename:
+                if region:
+                    for serv in i['endpoints']:
+                        if region.upper() == serv['region']:
+                            account_data['uri'] = serv['publicURL']
+                else:
+                    account_data['uri'] = i['endpoints'][0]['publicURL']
         account_data['token'] = auth_data['token']['id']
         account_data['id'] = auth_data['token']['tenant']['id']
         return account_data
