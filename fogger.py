@@ -185,6 +185,7 @@ def massbuild(*args, **kwargs):
 
 def main():
     '''Parse all CLI arguments.'''
+    auth()
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='subparsers')
 ## List arguments
@@ -213,7 +214,8 @@ def main():
     build_subparser.add_argument('-S', '--start-at', action='store', type=int,
             default=1)
     build_subparser.add_argument('-i', '--image', action='store', type=str)
-    build_subparser.add_argument('-r', '--region', action='store', type=str)
+    build_subparser.add_argument('-r', '--region', action='store', type=str,
+            choices=pyrax.regions)
     build_subparser.add_argument('-P', '--password', action='store', type=str)
     build_subparser.add_argument('--no-wait', action='store_true')
     build_subparser.add_argument('--no-disk-config', action='store_true',
