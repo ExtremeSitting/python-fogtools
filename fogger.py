@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-         #   Copyright 2013 Sam Chapler
+#   Copyright 2013 Sam Chapler
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -43,8 +43,6 @@ def servercallback(srv):
         sleep(3)
         srv.get()
     ip = [ip for ip in srv.networks['public'] if len(ip) <= 15][0]
-#    utils.printvtable([('Name', srv.name), ('Pass', adminpasses[srv.id]),
-#            ('Status', srv.status), ('IP', ip)])
     server_return.append((srv.id, srv.name, adminpasses[srv.id], srv.status, ip))
 
 def listservers(*args):
@@ -53,65 +51,59 @@ def listservers(*args):
     fields = ['Name', 'DC', 'Status', 'Public IPv4',
             'Private IPv4', 'Date Created', 'Server ID', 'Image']
     servdata = []
-    dfwservers = pyrax.connect_to_cloudservers(region='DFW')
-    ordservers = pyrax.connect_to_cloudservers(region='ORD')
-    for server in dfwservers.servers.list():
-        servdata.append((server.name, 'DFW', server.status,
-                [pub for pub in server.networks['public'] if len(pub) <= 15][0],
-                [pri for pri in server.networks['private'] if len(pri) <= 15][0],
-                utils.converttime(server.created), server.id, findimage(server.image['id'])))
-    for server in ordservers.servers.list():
-        servdata.append((server.name, 'ORD', server.status,
-                [pub for pub in server.networks['public'] if len(pub) <= 15][0],
-                [pri for pri in server.networks['private'] if len(pri) <= 15][0],
-                utils.converttime(server.created), server.id, findimage(server.image['id'])))
+    c2cs = pyrax.connect_to_cloudservers
+    for reg in pyrax.regions:
+        for server in c2cs(region=reg).list():
+            servdata.append((server.name, reg, server.status,
+                    [pub for pub in server.networks['public'] if len(pub) <= 15][0],
+                    [pri for pri in server.networks['private'] if len(pri) <= 15][0],
+                    utils.converttime(server.created), server.id,
+                    findimage(server.image['id'])))
     utils.printhtable(fields, servdata)
 
-def listimages(*args):
-    '''Print out all images including base images in account'''
+def listimages():
     cs = auth()
+    c2cs = pyrax.connect_to_cloudservers
     basefields = ['Name', 'Status', 'Created at', 'ID']
     snapfields = ['Name', 'Status', 'DC', 'Parent', 'Created at', 'ID']
     baseimages = []
     snaps = []
-    dfwservers = pyrax.connect_to_cloudservers(region='DFW')
-    ordservers = pyrax.connect_to_cloudservers(region='ORD')
-    for image in cs.images.list():
-        if image.metadata['image_type'] == 'base':
-            baseimages.append((image.name, image.status,
-                    utils.converttime(image.created), image.id))
-    for image in dfwservers.images.list():
-        if image.metadata['image_type'] == 'snapshot':
+    for image in cs.list_base_images():
+        baseimages.append((image.name, image.status,
+                utils.converttime(image.created), image.id))
+    for reg in pyrax.regions:
+        for image in c2cs(region=reg).list_snapshots():
             try:
-                snaps.append((image.name, image.status, 'DFW',
-                        image.server['id'], utils.converttime(image.created),
-                        image.id))
+                snaps.append((image.name, image.status, reg,
+                        image.server['id'],
+                        utils.converttime(image.created), image.id))
             except AttributeError:
-                snaps.append((image.name, image.status, 'DFW',
-                        'Server Deleted', utils.converttime(image.created),
-                        image.id))
-    for image in ordservers.images.list():
-        if image.metadata['image_type'] == 'snapshot':
-            try:
-                snaps.append((image.name, image.status, 'ORD',
-                        image.server['id'], utils.converttime(image.created),
-                        image.id))
-            except AttributeError:
-                snaps.append((image.name, image.status, 'ORD',
+                snaps.append((image.name, image.status, reg,
                         'Server Deleted', utils.converttime(image.created),
                         image.id))
     utils.printhtable(basefields, baseimages)
     utils.printhtable(snapfields, snaps)
 
+def list_flavors():
+    cs = auth()
+    c2cs = pyrax.connect_to_cloudservers
+    fields = ['ID', 'Region','Name', 'RAM', 'Swap', 'Disk', 'Network', 'vCPUs']
+
+    for reg in pyrax.regions:
+        flavors = []
+        for flav in c2cs(region=reg).list_flavors():
+            flavors.append((flav.id, reg, flav.name, flav.ram, flav.swap,
+                    flav.disk, flav.rxtx_factor, flav.vcpus))
+        utils.printhtable(fields, flavors, sort=0)
+        del flavors
+
 def findimage(imageid):
-    dfwservers = pyrax.connect_to_cloudservers(region='DFW')
-    ordservers = pyrax.connect_to_cloudservers(region='ORD')
-    try:
-        return dfwservers.images.get(imageid).name
-    except ncexc.NotFound:
-        return ordservers.images.get(imageid).name
-    except ncexc.NotFound:
-        return 'Image Deleted'
+    c2cs = pyrax.connect_to_cloudservers
+    for reg in pyrax.regionsr:
+        try:
+            return c2cs(region=reg).images.get(imageid).name
+        except ncexc.NotFound:
+            continue
 
 def listlbs(*args):
     '''Print out all loadbalancers'''
@@ -119,14 +111,11 @@ def listlbs(*args):
     fields = ['Name', 'Status', 'Node Count', 'Protocol', 'Region',
             'Created at', 'ID']
     lbdata = []
-    dfwlbs = pyrax.connect_to_cloud_loadbalancers(region='DFW')
-    ordlbs = pyrax.connect_to_cloud_loadbalancers(region='ORD')
-    for lb in dfwlbs.list():
-        lbdata.append((lb.name, lb.status, str(lb.nodeCount), lb.protocol,
-                'DFW', utils.converttime(lb.created['time']), lb.id))
-    for lb in ordlbs.list():
-        lbdata.append((lb.name, lb.status, str(lb.nodeCount), lb.protocol,
-                'ORD', utils.converttime(lb.created['time']), lb.id))
+    c2lb = pyrax.connect_to_cloud_loadbalancers
+    for reg in pyrax.region:
+        for lb in c2lb(region=reg).list():
+            lbdata.append((lb.name, lb.status, str(lb.nodeCount), lb.protocol,
+                    reg, utils.converttime(lb.created['time']), lb.id))
     utils.printhtable(fields, lbdata)
 
 def massbuild(*args, **kwargs):
@@ -204,6 +193,9 @@ def main():
             help='List servers on account.')
     list_subparser.add_argument('--images', action='store_true',
             help='List images on account.')
+    list_subparser.add_argument('--image', action='store', type=str,
+            help='List images on account.')
+    list_subparser.add_argument('--flavors', action='store_true')
     list_subparser.add_argument('--lbs', action='store_true',
             help='List loadbalancers on account.')
     list_subparser.add_argument('--lb-protocols', action='store_true')
@@ -223,8 +215,6 @@ def main():
     build_subparser.add_argument('-i', '--image', action='store', type=str)
     build_subparser.add_argument('-r', '--region', action='store', type=str)
     build_subparser.add_argument('-P', '--password', action='store', type=str)
-    build_subparser.add_argument('-f', '--files', nargs='*', action='store',
-            type=str)
     build_subparser.add_argument('--no-wait', action='store_true')
     build_subparser.add_argument('--no-disk-config', action='store_true',
             default=False)
@@ -236,23 +226,17 @@ def main():
             listservers()
         elif args.images:
             listimages()
+        elif args.image:
+            findimage(args.image)
+        elif args.flavors:
+            list_flavors()
         elif args.lbs:
             listlbs()
     elif args.subparsers == 'build':
         if args.build_server:
-#            if len(args.files) > 5:
-#                print 'Too many files. 5 files max.'
-#                exit(1)
-#            else:
-#                dfiles = {}
-#                for filename in args.files:
-#                    with open(filename) as f:
-#                        data = f.read()
-#                        dfiles[filename] = data
-#            print files.items()
             massbuild(basename=args.name, size=args.size, imageid=args.image,
             amount=args.amount, start=args.start_at, region=args.region,
             password=args.password, nowait=args.no_wait, files=None,
-            disk=args.no-disk-config)
+            disk=args.no_disk_config)
 if __name__ == '__main__':
     main()
